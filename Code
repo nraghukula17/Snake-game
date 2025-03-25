@@ -1,0 +1,439 @@
+Here is the code from the PDF, formatted for better readability:
+
+```java
+//SnakeGame. java [cite: 1]
+
+import java.awt.BorderLayout;
+import java.awt.Point;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.util.LinkedList;
+import java.util.Random;
+import javax.swing.JFrame;
+
+public class SnakeGame extends JFrame {
+
+    private static final long FRAME_TIME = 1000L / 50L;
+
+    /**
+     * The minimum length of the snake. [cite: 2, 3]
+     * This allows the snake to grow
+     * right when the game starts, so that we're not just a head moving
+     * around on the board. [cite: 3, 4]
+     */
+    private static final int MIN_SNAKE_LENGTH = 5;
+
+    /**
+     * The maximum number of directions that we can have polled in the
+     * direction list. [cite: 4, 5, 6, 7, 8]
+     */
+    private static final int MAX_DIRECTIONS = 3;
+
+    private BoardPanel board;
+
+    private SidePanel side;
+
+    /**
+     * The random number generator (used for spawning fruits). [cite: 6]
+     */
+    private Random random;
+
+    /**
+     * The Clock instance for handling the game logic. [cite: 7, 8]
+     */
+    private Clock logicTimer;
+
+    private boolean isNewGame;
+
+    private boolean isGameOver;
+
+    private boolean isPaused;
+
+    private LinkedList<Point> snake;
+
+    private LinkedList<Direction> directions;
+
+    private int score;
+
+    private int fruitsEaten;
+
+    private int nextFruitScore;
+
+    /**
+     * Creates a new SnakeGame instance. Creates a new window,
+     * and sets up the controller input. [cite: 9, 10, 11, 12]
+     */
+    private SnakeGame() {
+        super("Snake Game");
+        setLayout(new BorderLayout());
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setResizable(false);
+
+        /*
+         * Initialize the game's panels and add them to the window. [cite: 11]
+         */
+        this.board = new BoardPanel(this);
+        this.side = new SidePanel(this);
+        add(board, BorderLayout.CENTER);
+        add(side, BorderLayout.EAST);
+        /*
+         * Adds a new key listener to the frame to process input. [cite: 12]
+         */
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                switch (e.getKeyCode()) {
+                    /*
+                     * If the game is not paused, and the game is not over... [cite: 13, 14]
+                     * Ensure that the direction list is not full, and that the most
+                     * recent direction is adjacent to North before adding the
+                     * direction to the list. [cite: 14]
+                     */
+                    case KeyEvent.VK_W:
+                    case KeyEvent.VK_UP:
+                        if (!isPaused && !isGameOver) {
+                            if (directions.size() < MAX_DIRECTIONS) {
+                                Direction last = directions.peekLast();
+                                if (last != Direction.South && last != Direction.North) {
+                                    directions.addLast(Direction.North);
+                                }
+                            }
+                        }
+                        break;
+                    case KeyEvent.VK_S:
+                    case KeyEvent.VK_DOWN:
+                        if (!isPaused && !isGameOver) {
+                            if (directions.size() < MAX_DIRECTIONS) {
+                                Direction last = directions.peekLast();
+                                if (last != Direction.North && last != Direction.South) {
+                                    directions.addLast(Direction.South);
+                                }
+                            }
+                        }
+                        break;
+                    case KeyEvent.VK_A:
+                    case KeyEvent.VK_LEFT:
+                        if (!isPaused && !isGameOver) {
+                            if (directions.size() < MAX_DIRECTIONS) {
+                                Direction last = directions.peekLast();
+                                if (last != Direction.East && last != Direction.West) {
+                                    directions.addLast(Direction.West);
+                                }
+                            }
+                        }
+                        break;
+                    case KeyEvent.VK_D:
+                    case KeyEvent.VK_RIGHT:
+                        if (!isPaused && !isGameOver) {
+                            if (directions.size() < MAX_DIRECTIONS) {
+                                Direction last = directions.peekLast();
+                                if (last != Direction.West && last != Direction.East) {
+                                    directions.addLast(Direction.East);
+                                }
+                            }
+                        }
+                        break;
+                    /*
+                     * If the game is not over, toggle the paused flag and update
+                     * the logicTimer's pause flag accordingly. [cite: 18, 19]
+                     */
+                    case KeyEvent.VK_P:
+                        if (!isGameOver) {
+                            isPaused = !isPaused;
+                            logicTimer.setPaused(isPaused);
+                        }
+                        break;
+                    /*
+                     * Reset the game if one is not currently in progress. [cite: 19, 20]
+                     */
+                    case KeyEvent.VK_ENTER:
+                        if (isNewGame || isGameOver) {
+                            resetGame();
+                        }
+                        break;
+                }
+            }
+        });
+
+        /*
+         * Resize the window to the appropriate size, center it on the
+         * screen and display it. [cite: 20, 21]
+         */
+        pack();
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    /**
+     * Starts the game running. [cite: 21, 22, 23, 24, 25, 26, 27, 28, 29]
+     */
+    private void startGame() {
+        /*
+         * Initialize everything we're going to be using. [cite: 22]
+         */
+        this.random = new Random();
+        this.snake = new LinkedList<>();
+        this.directions = new LinkedList<>();
+        this.logicTimer = new Clock(9.0f);
+        this.isNewGame = true;
+        //Set the timer to paused initially. [cite: 23]
+        logicTimer.setPaused(true);
+        /*
+         * This is the game loop. [cite: 24, 25]
+         * It will update and render the game and will
+         * continue to run until the game window is closed. [cite: 25]
+         */
+        while (true) {
+            //Get the current frame's start time. [cite: 25]
+            long start = System.nanoTime();
+            //Update the logic timer. [cite: 25, 26]
+            logicTimer.update();
+            if (logicTimer.hasElapsedCycle()) {
+                updateGame();
+            }
+            //Repaint the board and side panel with the new content. [cite: 26, 27, 28, 29]
+            board.repaint();
+            side.repaint();
+            /*
+             * Calculate the delta time between since the start of the frame
+             * and sleep for the excess time to cap the frame rate. [cite: 27, 28, 29]
+             * While not
+             * incredibly accurate, it is sufficient for our purposes. [cite: 29]
+             */
+            long delta = (System.nanoTime() - start) / 1000000L;
+            if (delta < FRAME_TIME) {
+                try {
+                    Thread.sleep(FRAME_TIME - delta);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    /**
+     * Updates the game's logic. [cite: 30, 31, 32]
+     */
+    private void updateGame() {
+        /*
+         * Gets the type of tile that the head of the snake collided with. [cite: 30, 31]
+         * If
+         * the snake hit a wall, SnakeBody will be returned, as both conditions
+         * are handled identically. [cite: 31, 32]
+         */
+        TileType collision = updateSnake();
+        if (collision == TileType.Fruit) {
+            fruitsEaten++;
+            score += nextFruitScore;
+            spawnFruit();
+        } else if (collision == TileType.SnakeBody) {
+            isGameOver = true;
+            logicTimer.setPaused(true);
+        } else if (nextFruitScore > 10) {
+            nextFruitScore--;
+        }
+    }
+
+    /**
+     * Updates the snake's position and size. [cite: 33, 34, 35, 36, 37, 38, 39]
+     *
+     * @return Tile tile that the head moved into. [cite: 33, 34, 35, 36, 37, 38, 39]
+     */
+    private TileType updateSnake() {
+        Direction direction = directions.peekFirst();
+        /*
+         * Here we calculate the new point that the snake's head will be at
+         * after the update. [cite: 34, 35, 36, 37, 38, 39]
+         */
+        Point head = new Point(snake.peekFirst());
+        switch (direction) {
+            case North:
+                head.y--;
+                break;
+            case South:
+                head.y++;
+                break;
+            case West:
+                head.x--;
+                break;
+            case East:
+                head.x++;
+                break;
+        }
+        if (head.x < 0 || head.x >= BoardPanel.COL_COUNT || head.y < 0 || head.y >=
+                BoardPanel.ROW_COUNT) {
+            return TileType.SnakeBody;
+            //Pretend we collided with our body. [cite: 36, 37, 38, 39]
+        }
+        TileType old = board.getTile(head.x, head.y);
+        if (old != TileType.Fruit && snake.size() > MIN_SNAKE_LENGTH) {
+            Point tail = snake.removeLast();
+            board.setTile(tail, null);
+            old = board.getTile(head.x, head.y);
+        }
+        if (old != TileType.SnakeBody) {
+            board.setTile(snake.peekFirst(), TileType.SnakeBody);
+            snake.push(head);
+            board.setTile(head, TileType.SnakeHead);
+            if (directions.size() > 1) {
+                directions.poll();
+            }
+        }
+        return old;
+    }
+
+    /**
+     * Resets the game's variables to their default states and starts a new game. [cite: 39, 40, 41, 42, 43, 44]
+     */
+    private void resetGame() {
+        this.score = 0;
+        this.fruitsEaten = 0;
+        this.isNewGame = false;
+        this.isGameOver = false;
+        Point head = new Point(BoardPanel.COL_COUNT / 2, BoardPanel.ROW_COUNT / 2);
+        snake.clear();
+        snake.add(head);
+        board.clearBoard();
+        board.setTile(head, TileType.SnakeHead);
+        directions.clear();
+        directions.add(Direction.North);
+        logicTimer.reset();
+        spawnFruit();
+    }
+
+    /**
+     * Gets the flag that indicates whether or not we're playing a new game. [cite: 42, 43, 44]
+     *
+     * @return The new game flag. [cite: 42, 43, 44]
+     */
+    public boolean isNewGame() {
+        return isNewGame;
+    }
+
+    public boolean isGameOver() {
+        return isGameOver;
+    }
+
+    /**
+     * Gets the flag that indicates whether or not the game is paused. [cite: 43, 44]
+     *
+     * @return The paused flag. [cite: 43, 44]
+     */
+    public boolean isPaused() {
+        return isPaused;
+    }
+
+    /**
+     * Spawns a new fruit onto the board. [cite: 44, 45, 46, 47, 48, 49, 50, 51, 52]
+     */
+    private void spawnFruit() {
+        //Reset the score for this fruit to 100. [cite: 45, 46, 47]
+        this.nextFruitScore = 100;
+        int index = random.nextInt(BoardPanel.COL_COUNT * BoardPanel.ROW_COUNT -
+                snake.size());
+        int freeFound = -1;
+        for (int x = 0; x < BoardPanel.COL_COUNT; x++) {
+            for (int y = 0; y < BoardPanel.ROW_COUNT; y++) {
+                TileType type = board.getTile(x, y);
+                if (type == null || type == TileType.Fruit) {
+                    if (++freeFound == index) {
+                        board.setTile(x, y, TileType.Fruit);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Gets the current score. [cite: 48, 49, 50, 51, 52]
+     *
+     * @return The score. [cite: 48, 49, 50, 51, 52]
+     */
+    public int getScore() {
+        return score;
+    }
+
+    /**
+     * Gets the number of fruits eaten. [cite: 49, 50, 51, 52]
+     *
+     * @return The fruits eaten. [cite: 49, 50, 51, 52]
+     */
+    public int getFruitsEaten() {
+        return fruitsEaten;
+    }
+
+    /**
+     * Gets the next fruit score. [cite: 50, 51, 52]
+     *
+     * @return The next fruit score. [cite: 50, 51, 52]
+     */
+    public int getNextFruitScore() {
+        return nextFruitScore;
+    }
+
+    /**
+     * Gets the current direction of the snake. [cite: 51, 52]
+     *
+     * @return The current direction. [cite: 51, 52]
+     */
+    public Direction getDirection() {
+        return directions.peek();
+    }
+
+    public static void main(Stringargs) {
+        SnakeGame snake = new SnakeGame();
+        snake.startGame();
+    }
+}
+```
+
+```java
+//BoardPanel.java [cite: 53, 54, 55, 56, 57, 58, 59, 60, 61, 62]
+import java.awt.BorderLayout;
+import java.awt.Point;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.util.LinkedList;
+import java.util.Random;
+import javax.swing.JFrame;
+
+public class SnakeGame extends JFrame {
+    private static final long serialVersionUID = 6678292058307426314L;
+    private static final long FRAME_TIME = 1000L / 50L;
+    private static final int MIN_SNAKE_LENGTH = 5;
+    /**
+     * The maximum number of directions that we can have polled in the
+     * direction list. [cite: 55, 56]
+     */
+    private static final int MAX_DIRECTIONS = 3;
+    /**
+     * The BoardPanel instance. [cite: 56, 57]
+     */
+    private BoardPanel board;
+    /**
+     * The SidePanel instance. [cite: 57]
+     */
+    private SidePanel side;
+    /**
+     * The random number generator (used for spawning fruits). [cite: 57, 58, 59, 60, 61, 62]
+     */
+    private Random random;
+    private Clock logicTimer;
+    private boolean isNewGame;
+    private boolean isGameOver;
+    private boolean isPaused;
+    private LinkedList<Point> snake;
+    private LinkedList<Direction> directions;
+    private int score;
+    private int fruitsEaten;
+    private int nextFruitScore;
+    /**
+     * Creates a new SnakeGame instance. Creates a new window,
+     * and sets up the controller input. [cite: 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69]
+     */
+    private SnakeGame() {
+        super("Snake Game");
+        setLayout(new BorderLayout());
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setResizable(false);
